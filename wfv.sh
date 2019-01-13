@@ -38,6 +38,9 @@ THUCOL='\033[31;1m'
 
 FORECASTS="$CCH_DIR/forecasts"
 
+SCRIPTDIR=$(dirname $(readlink -f "$0"))
+SMHI="$SCRIPTDIR/smhi"
+
 # fetch and parse forecasts from smhi
 sync_cmd() {
     URL="https://opendata-download-metfcst.smhi.se"
@@ -64,17 +67,17 @@ list_disp_day() {
     min=$(cut -f2 $dayfile | LANG=C sort -n | head -n1)
     max=$(cut -f2 $dayfile | LANG=C sort -n | tail -n1)
     maxwind=$(cut -f3 $dayfile | LANG=C sort -n | tail -n1)
-    cond=$(sed "$symb!d" smhi/wsymb2)
+    cond=$(sed "$symb!d" "$SMHI/wsymb2")
     printf "$DAYCOL%s$NRMCOL $CLDCOL%s $NRMCOL- $WRMCOL%s $NRMCOL%s m/s\\n" \
         "$(date -d "$day" +"$WFV_DAY_FMT")" "$min" "$max" "$maxwind"
 }
 
 list_disp_forecast() {
     if [ "$pcat" -eq "0" ]; then
-        cond="$(sed "$symb!d" smhi/wsymb2)"
+        cond="$(sed "$symb!d" "$SMHI/wsymb2")"
         cndcol=$CNDCOL
     else
-        cond="$(sed "$pcat!d" smhi/pcat) ($pmean mm/h)"
+        cond="$(sed "$pcat!d" "$SMHI/pcat") ($pmean mm/h)"
         cndcol=$PRCCOL
     fi
     if [ "$(echo "$temp <= ($min+($max-($min))/3)" | bc)" -eq "1" ]; then
