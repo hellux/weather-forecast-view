@@ -27,10 +27,10 @@ fi
 [ -z "$WFV_LAT" ] && WFV_LAT="58"
 
 NRMCOL='\033[0m'
-DAYCOL='\033[33;1m'
+DAYCOL='\033[0;1m'
 # weather conditions
-CNDCOL='\033[0;1m'
-PRCCOL='\033[34;1m'
+CNDCOL='\033[32m'
+PRCCOL='\033[34m'
 CLDCOL='\033[34;1m'
 MODCOL='\033[35;1m'
 WRMCOL='\033[31;1m'
@@ -63,37 +63,40 @@ sync_cmd() {
 }
 
 list_disp_day() {
-    symb=$(cut -f4 $dayfile | sort | uniq -c | sort -n | tail -n1 | rev | cut -c1)
+    daystr="$DAYCOL$(date -d "$day" +"$WFV_DAY_FMT")"
+
     min=$(cut -f2 $dayfile | LANG=C sort -n | head -n1)
     max=$(cut -f2 $dayfile | LANG=C sort -n | tail -n1)
-    maxwind=$(cut -f3 $dayfile | LANG=C sort -n | tail -n1)
-    cond=$(sed "$symb!d" "$SMHI/wsymb2")
-    printf "$DAYCOL%s$NRMCOL $CLDCOL%s $NRMCOL- $WRMCOL%s $NRMCOL%s m/s\\n" \
-        "$(date -d "$day" +"$WFV_DAY_FMT")" "$min" "$max" "$maxwind"
+    tmpstr="$NRMCOL( $CLDCOL$min $NRMCOL- $WRMCOL$max $NRMCOL)"
+
+    maxwind="$(cut -f3 $dayfile | LANG=C sort -n | tail -n1)"
+    windstr="$NRMCOL$maxwind m/s"
+
+    echo "$daystr $tmpstr $windstr"
 }
 
 list_disp_forecast() {
-    if [ "$pcat" -eq "0" ]; then
-        cond="$(sed "$symb!d" "$SMHI/wsymb2")"
-        cndcol=$CNDCOL
-    else
-        cond="$(sed "$pcat!d" "$SMHI/pcat") ($pmean mm/h)"
-        cndcol=$PRCCOL
+    hourstr="[$(date -d "$time" +"%H")]"
+
+    col=$MODCOL
+    if [ $(echo "$min != $max" | bc) -eq 1 ]; then
+        ratio=$(echo "(100*($temp-($min)))/($max-($min))" | bc)
+        if   [ "$ratio" -lt 33 ]; then col=$CLDCOL
+        elif [ "$ratio" -gt 67 ]; then col=$WRMCOL
+        fi
     fi
-    if [ "$(echo "$temp <= ($min+($max-($min))/3)" | bc)" -eq "1" ]; then
-        tmpcol=$CLDCOL
-    elif [ "$(echo "$temp >= ($max-($max-($min))/3)" | bc)" -eq "1" ]; then
-        tmpcol=$WRMCOL
-    else
-        tmpcol=$MODCOL
+    tmpstr="$(printf "$col%*.1f°C$NRMCOL" 4 "$temp")"
+
+    windstr="$(printf "%*.1f m/s" 3 "$wind")"
+
+    if [ "$pcat" -eq "0" ]
+    then condstr="$CNDCOL$(sed "$symb!d" "$SMHI/wsymb2")$NRMCOL"
+    else condstr="$PRCCOL$(sed "$pcat!d" "$SMHI/pcat") ($pmean mm/h)$NRMCOL"
     fi
-    if [ "$tstm" -gt "5" ]; then
-        thunder="$tstm %"
-    fi
-    printf "$NRMCOL[%s] $tmpcol%*.1f°C$NRMCOL, %*.1f m/s $cndcol%s $THUCOL%s\n" \
-        "$(date -d "$time" +"%H")" \
-        4 "$temp" 3 "$wind" \
-        "$cond" "$thunder"
+
+    [ "$tstm" -gt "5" ] && thustr="$THUCOL$tstm%$NRMCOL"
+
+    echo "$hourstr $tmpstr $windstr $condstr $thustr"
 }
 
 # format and print fetched forecasts
