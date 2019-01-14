@@ -72,7 +72,7 @@ list_disp_day() {
     maxwind="$(cut -f3 $dayfile | LANG=C sort -n | tail -n1)"
     windstr="$NRMCOL$maxwind m/s"
 
-    echo "$daystr $tmpstr $windstr"
+    printf "$daystr $tmpstr $windstr\n"
 }
 
 list_disp_forecast() {
@@ -96,7 +96,7 @@ list_disp_forecast() {
 
     [ "$tstm" -gt "5" ] && thustr="$THUCOL$tstm%$NRMCOL"
 
-    echo "$hourstr $tmpstr $windstr $condstr $thustr"
+    printf "$hourstr $tmpstr $windstr $condstr $thustr\n"
 }
 
 # format and print fetched forecasts
