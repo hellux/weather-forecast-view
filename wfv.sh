@@ -72,7 +72,12 @@ list_disp_day() {
     maxwind="$(cut -f3 $dayfile | LANG=C sort -n | tail -n1)"
     windstr="$NRMCOL$maxwind m/s"
 
-    echo "$daystr $tmpstr $windstr"
+    precip="$(cut -f6 $dayfile | awk '{s+=$1} END {print s}')"
+    if [ "$(echo "$precip > 0" | bc)" -eq 1 ]; then
+        precipstr="$PRCCOL$precip mm$NRMCOL"
+    fi
+
+    echo "$daystr $tmpstr $windstr $precipstr"
 }
 
 list_disp_forecast() {
@@ -91,7 +96,7 @@ list_disp_forecast() {
 
     if [ "$pcat" -eq "0" ]
     then condstr="$CNDCOL$(sed "$symb!d" "$SMHI/wsymb2")$NRMCOL"
-    else condstr="$PRCCOL$(sed "$pcat!d" "$SMHI/pcat") ($pmean mm/h)$NRMCOL"
+    else condstr="$PRCCOL$(sed "$pcat!d" "$SMHI/pcat") ($pmean mm)$NRMCOL"
     fi
 
     [ "$tstm" -gt "5" ] && thustr="$THUCOL$tstm%$NRMCOL"
