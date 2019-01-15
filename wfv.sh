@@ -155,6 +155,7 @@ mkdir -p "$RNT_DIR"
 
 command=$1
 if [ -n "$command" ]; then
+    shift
     case "$command" in
         s|sync) sync_cmd "$@";;
         l|ls|list) list_cmd "$@";;
