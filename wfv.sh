@@ -67,7 +67,7 @@ list_disp_day() {
 
     min=$(cut -f2 $dayfile | LANG=C sort -n | head -n1)
     max=$(cut -f2 $dayfile | LANG=C sort -n | tail -n1)
-    tmpstr="$NRMCOL( $CLDCOL$min $NRMCOL- $WRMCOL$max $NRMCOL)"
+    tmpstr="$NRMCOL( $CLDCOL$min°C $NRMCOL- $WRMCOL$max°C $NRMCOL)"
 
     maxwind="$(cut -f3 $dayfile | LANG=C sort -n | tail -n1)"
     windstr="$NRMCOL$maxwind m/s"
