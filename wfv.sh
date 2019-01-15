@@ -26,6 +26,13 @@ fi
 [ -z "$WFV_LON" ] && WFV_LON="16"
 [ -z "$WFV_LAT" ] && WFV_LAT="58"
 
+SCRIPTDIR=$(dirname $(readlink -f "$0"))
+case $LANG in
+    ru*) LC=ru;;
+    *) LC=en;;
+esac
+SMHI="$SCRIPTDIR/smhi/$LC" # TODO install to usr or include in script
+
 NRMCOL='\033[0m'
 DAYCOL='\033[0;1m'
 # weather conditions
@@ -37,9 +44,6 @@ WRMCOL='\033[31;1m'
 THUCOL='\033[31;1m'
 
 FORECASTS="$CCH_DIR/forecasts"
-
-SCRIPTDIR=$(dirname $(readlink -f "$0"))
-SMHI="$SCRIPTDIR/smhi"
 
 # fetch and parse forecasts from smhi
 sync_cmd() {
@@ -77,10 +81,9 @@ list_disp_day() {
     maxwind="$(cut -f3 $dayfile | LANG=C sort -n | tail -n1)"
     windstr="$NRMCOL$maxwind m/s"
 
-    cut -f6 $dayfile
     precip="$(cut -f6 $dayfile | LANG=C awk '{p+=$0} END {print p}')"
     if [ "$(echo "$precip > 0" | bc)" -eq 1 ]; then
-        precipstr="$PRCCOL$precip mm$NRMCOL"
+        precipstr=$(printf "$PRCCOL%.1f mm$NRMCOL" "$precip")
     fi
 
     printf "$daystr $tmpstr $windstr $precipstr\n"
@@ -100,6 +103,7 @@ list_disp_forecast() {
 
     windstr="$(printf "%*.1f m/s" 3 "$wind")"
 
+    [ "$pmean" = "0" ] && pmean="<0.1"
     if [ "$pcat" -eq "0" ]
     then condstr="$CNDCOL$(sed "$symb!d" "$SMHI/wsymb2")$NRMCOL"
     else condstr="$PRCCOL$(sed "$pcat!d" "$SMHI/pcat") ($pmean mm)$NRMCOL"
