@@ -56,10 +56,15 @@ sync_cmd() {
         (.parameters[] | select(.name == "tstm") | .values[0])    #thunder
     ] | @tsv'
 
+    curl -s $API_CALL > "$RNT_DIR/response"
+    if grep -iq "out of bounds" "$RNT_DIR/response"; then
+        die "(%s, %s) is out of bounds" "$WFV_LON" "$WFV_LAT"
+    fi
+
     mkdir -p "$CCH_DIR"
 
-    curl -s $API_CALL > "$RNT_DIR/weather"
-    jq -r "$JQ_PARSE" "$RNT_DIR/weather" > "$FORECASTS"
+    jq -r "$JQ_PARSE" "$RNT_DIR/response" > "$FORECASTS" \
+        || die "lon and lat valid? -- (%s,%s)" "$WFV_LON" "$WFV_LAT"
 }
 
 list_disp_day() {
@@ -77,7 +82,7 @@ list_disp_day() {
         precipstr="$PRCCOL$precip mm$NRMCOL"
     fi
 
-    echo "$daystr $tmpstr $windstr $precipstr"
+    printf "$daystr $tmpstr $windstr $precipstr\n"
 }
 
 list_disp_forecast() {
@@ -101,7 +106,7 @@ list_disp_forecast() {
 
     [ "$tstm" -gt "5" ] && thustr="$THUCOL$tstm%$NRMCOL"
 
-    echo "$hourstr $tmpstr $windstr $condstr $thustr"
+    printf "$hourstr $tmpstr $windstr $condstr $thustr\n"
 }
 
 # format and print fetched forecasts
@@ -150,16 +155,19 @@ list_cmd() {
     done
 }
  
-command=$1
-[ -z "$command" ] && list_cmd && exit 0
-shift
 
 mkdir -p "$RNT_DIR"
 
-case "$command" in
-    s|sync) sync_cmd "$@";;
-    l|ls|list) list_cmd "$@";;
-    *) die 'invalid command -- %s\n\n%s' "$command" "$USAGE";;
-esac
+command=$1
+if [ -n "$command" ]; then
+    shift
+    case "$command" in
+        s|sync) sync_cmd "$@";;
+        l|ls|list) list_cmd "$@";;
+        *) die 'invalid command -- %s\n\n%s' "$command" "$USAGE";;
+    esac
+else
+    list_cmd
+fi
 
 rm -rf "$RNT_DIR"
