@@ -77,7 +77,8 @@ list_disp_day() {
     maxwind="$(cut -f3 $dayfile | LANG=C sort -n | tail -n1)"
     windstr="$NRMCOL$maxwind m/s"
 
-    precip="$(cut -f6 $dayfile | awk '{s+=$1} END {print s}')"
+    cut -f6 $dayfile
+    precip="$(cut -f6 $dayfile | LANG=C awk '{p+=$0} END {print p}')"
     if [ "$(echo "$precip > 0" | bc)" -eq 1 ]; then
         precipstr="$PRCCOL$precip mm$NRMCOL"
     fi
