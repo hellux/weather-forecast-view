@@ -13,6 +13,14 @@ die() {
     exit 1
 }
 
+USAGE="usage: wfv list [-sd] [-n days]
+       wfv sync
+
+flags:
+    s       -- sync, fetch and store forecasts in cache
+    d       -- display only daily forecasts
+    n days  -- number of days to display"
+
 if [ -z "$XDG_CACHE_HOME" ];
 then CCH_DIR="$HOME/.cache/wfv"
 else CCH_DIR="$XDG_CACHE_HOME/wfv"
@@ -116,22 +124,26 @@ wsfmt() {
 list_disp_day() {
     day="$DAYCOL$(date -d "$day" +"%a %e %b")"
 
-    tmin=$(cut -f3 $dayfile | LANG=C sort -n | head -n1)
-    tmax=$(cut -f3 $dayfile | LANG=C sort -n | tail -n1)
-    tstr="$NRMCOL$CLDCOL$(tfmt $tmin) $(tfmt $tmax)"
+    tmin=$(cut -f3 "$dayfile" | LANG=C sort -n | head -n1)
+    tmax=$(cut -f3 "$dayfile" | LANG=C sort -n | tail -n1)
 
-    wsmax="$(cut -f6 $dayfile | LANG=C sort -n | tail -n1)"
+    tccavg=$(cut -f9 "$dayfile" | LANG=C awk '{n+=1; cc+=$0} END {print cc/n}')
+    tccstr=$(printf "%.0f" "$tccavg")
+
+    wsmax="$(cut -f6 "$dayfile" | LANG=C sort -n | tail -n1)"
     wsmaxstr="$(wsfmt $wsmax)"
 
-    gustmax="$(cut -f13 $dayfile | LANG=C sort -n | tail -n1)"
+    gustmax="$(cut -f13 "$dayfile" | LANG=C sort -n | tail -n1)"
     gustmaxstr="$(wsfmt $gustmax)"
 
-    ptotal="$(cut -f18 $dayfile | LANG=C awk '{p+=$0} END {print p}')"
+    ptotal="$(cut -f18 "$dayfile" | LANG=C awk '{p+=$0} END {print p}')"
     if [ "$(echo "$ptotal > 0" | bc)" -eq 1 ]; then
         ptotalstr=$(printf "$PRCCOL%.1f mm$NRMCOL" "$ptotal")
     fi
 
-    daystr="$day $tstr $(wsfmt $wsmax) ($(wsfmt $gustmax)) $ptotalstr"
+    daystr=$(echo "$day $(tfmt $tmin) $(tfmt $tmax)  $tccstr" \
+                  "$(wsfmt $wsmax) ($(wsfmt $gustmax))" \
+                  "$ptotalstr")
     printf "$daystr\n"
 }
 
@@ -168,7 +180,7 @@ list_cmd() {
             s) sync=true;;
             d) day_only=true;;
             n) days=$OPTARG;;
-            [?]) die "invalid flag -- $OPTARG"
+            [?]) die "invalid flag -- %s\n\n%s" "$OPTARG" "$USAGE"
         esac
     done
     shift $((OPTIND-1))
@@ -211,7 +223,6 @@ list_cmd() {
     done
 }
  
-
 mkdir -p "$RNT_DIR"
 
 command=$1
