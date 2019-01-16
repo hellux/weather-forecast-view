@@ -87,7 +87,8 @@ sync_cmd() {
         (.parameters[] | select(.name == "Wsymb2")   | .values[0])  #20
     ] | @tsv' # turn json to tab separated values with 1h forecast per line
 
-    code="$(curl -w '%{http_code}' -o "$RNT_DIR/response" -s $API_CALL)"
+    code="$(curl --compressed -w '%{http_code}' \
+                 -o "$RNT_DIR/response" -s $API_CALL)"
     if [ "$code" -ne "200" ]; then
         die "fetch failed -- $code: \"$(cat "$RNT_DIR/response")\""
     fi
