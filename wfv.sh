@@ -22,7 +22,6 @@ then RNT_DIR="$CCH_DIR/runtime"
 else RNT_DIR="$XDG_RUNTIME_DIR/wfv"
 fi
 
-[ -z "$WFV_DAY_FMT" ] && WFV_DAY_FMT="%A, %B %d:"
 [ -z "$WFV_LON" ] && WFV_LON="16"
 [ -z "$WFV_LAT" ] && WFV_LAT="58"
 
@@ -36,29 +35,49 @@ SMHI="$SCRIPTDIR/smhi/$LC" # TODO install to usr or include in script
 NRMCOL='\033[0m'
 DAYCOL='\033[0;1m'
 # weather conditions
-CNDCOL='\033[32m'
-PRCCOL='\033[34m'
 CLDCOL='\033[34;1m'
 MODCOL='\033[35;1m'
 WRMCOL='\033[31;1m'
+WS1COL='\033[35m'
+WS2COL='\033[34m'
+WS3COL='\033[36m'
+WS4COL='\033[32m'
+WS5COL='\033[33m'
+WS6COL='\033[31m'
+CNDCOL='\033[0m'
+PRCCOL='\033[34m'
 THUCOL='\033[31;1m'
 
 FORECASTS="$CCH_DIR/forecasts"
 
 # fetch and parse forecasts from smhi
 sync_cmd() {
+    # API docs: https://opendata.smhi.se/apidocs/metfcst/index.html
     URL="https://opendata-download-metfcst.smhi.se"
-    API="/api/category/pmp3g/version/2/geotype/point"
-    API_CALL="$URL$API/lon/$WFV_LON/lat/$WFV_LAT/data.json"
+    REQUEST="/api/category/pmp3g/version/2/geotype/point"
+    API_CALL="$URL$REQUEST/lon/$WFV_LON/lat/$WFV_LAT/data.json"
     JQ_PARSE='.timeSeries[] | [
-        .validTime,                                               #time
-        (.parameters[] | select(.name == "t") | .values[0]),      #temp
-        (.parameters[] | select(.name == "ws") | .values[0]),     #windspeed
-        (.parameters[] | select(.name == "Wsymb2") | .values[0]), #symbol
-        (.parameters[] | select(.name == "pcat") | .values[0]),   #precip
-        (.parameters[] | select(.name == "pmean") | .values[0]),  #precip
-        (.parameters[] | select(.name == "tstm") | .values[0])    #thunder
-    ] | @tsv'
+        .validTime,                                                 #1
+        (.parameters[] | select(.name == "msl")      | .values[0]), #2
+        (.parameters[] | select(.name == "t")        | .values[0]), #3
+        (.parameters[] | select(.name == "vis")      | .values[0]), #4
+        (.parameters[] | select(.name == "wd")       | .values[0]), #5
+        (.parameters[] | select(.name == "ws")       | .values[0]), #6
+        (.parameters[] | select(.name == "r")        | .values[0]), #7
+        (.parameters[] | select(.name == "tstm")     | .values[0]), #8
+        (.parameters[] | select(.name == "tcc_mean") | .values[0]), #9
+        (.parameters[] | select(.name == "lcc_mean") | .values[0]), #10
+        (.parameters[] | select(.name == "mcc_mean") | .values[0]), #11
+        (.parameters[] | select(.name == "hcc_mean") | .values[0]), #12
+        (.parameters[] | select(.name == "gust")     | .values[0]), #13
+        (.parameters[] | select(.name == "pmin")     | .values[0]), #14
+        (.parameters[] | select(.name == "pmax")     | .values[0]), #15
+        (.parameters[] | select(.name == "spp")      | .values[0]), #16
+        (.parameters[] | select(.name == "pcat")     | .values[0]), #17
+        (.parameters[] | select(.name == "pmean")    | .values[0]), #18
+        (.parameters[] | select(.name == "pmedian")  | .values[0]), #19
+        (.parameters[] | select(.name == "Wsymb2")   | .values[0])  #20
+    ] | @tsv' # turn json to tab separated values with 1h forecast per line
 
     curl -s $API_CALL > "$RNT_DIR/response"
     if grep -iq "out of bounds" "$RNT_DIR/response"; then
@@ -71,54 +90,78 @@ sync_cmd() {
         || die "lon and lat valid? -- (%s,%s)" "$WFV_LON" "$WFV_LAT"
 }
 
+tfmt() {
+    tcol="$MODCOL"
+    if [ $(echo "$tmin != $tmax" | bc) -eq 1 ]; then
+        ratio=$(echo "(100*($1-($tmin)))/($tmax-($tmin))" | bc)
+        if   [ "$ratio" -lt 33 ]; then tcol=$CLDCOL
+        elif [ "$ratio" -gt 67 ]; then tcol=$WRMCOL
+        fi
+    fi
+    printf "$tcol%*.1f°C$NRMCOL" 5 "$1"
+}
+
+wsfmt() {
+    wsint="$(echo "($1+0.5)/1" | bc)"
+    if   [ "$wsint" -lt  3 ]; then wscol="$WS1COL"
+    elif [ "$wsint" -lt  5 ]; then wscol="$WS2COL"
+    elif [ "$wsint" -lt  7 ]; then wscol="$WS3COL"
+    elif [ "$wsint" -lt 10 ]; then wscol="$WS4COL"
+    elif [ "$wsint" -lt 20 ]; then wscol="$WS5COL"
+    else                           wscol="$WS6COL"
+    fi
+    printf "$wscol%*.1f m/s$NRMCOL" 4 "$1"
+}
+
 list_disp_day() {
-    daystr="$DAYCOL$(date -d "$day" +"$WFV_DAY_FMT")"
+    day="$DAYCOL$(date -d "$day" +"%a %e %b")"
 
-    min=$(cut -f2 $dayfile | LANG=C sort -n | head -n1)
-    max=$(cut -f2 $dayfile | LANG=C sort -n | tail -n1)
-    tmpstr="$NRMCOL( $CLDCOL$min°C $NRMCOL- $WRMCOL$max°C $NRMCOL)"
+    tmin=$(cut -f3 $dayfile | LANG=C sort -n | head -n1)
+    tmax=$(cut -f3 $dayfile | LANG=C sort -n | tail -n1)
+    tstr="$NRMCOL$CLDCOL$(tfmt $tmin) $(tfmt $tmax)"
 
-    maxwind="$(cut -f3 $dayfile | LANG=C sort -n | tail -n1)"
-    windstr="$NRMCOL$maxwind m/s"
+    wsmax="$(cut -f6 $dayfile | LANG=C sort -n | tail -n1)"
+    wsmaxstr="$(wsfmt $wsmax)"
 
-    precip="$(cut -f6 $dayfile | LANG=C awk '{p+=$0} END {print p}')"
-    if [ "$(echo "$precip > 0" | bc)" -eq 1 ]; then
-        precipstr=$(printf "$PRCCOL%.1f mm$NRMCOL" "$precip")
+    gustmax="$(cut -f13 $dayfile | LANG=C sort -n | tail -n1)"
+    gustmaxstr="$(wsfmt $gustmax)"
+
+    ptotal="$(cut -f18 $dayfile | LANG=C awk '{p+=$0} END {print p}')"
+    if [ "$(echo "$ptotal > 0" | bc)" -eq 1 ]; then
+        ptotalstr=$(printf "$PRCCOL%.1f mm$NRMCOL" "$ptotal")
     fi
 
-    printf "$daystr $tmpstr $windstr $precipstr\n"
+    daystr="$day $tstr $(wsfmt $wsmax) ($(wsfmt $gustmax)) $ptotalstr"
+    printf "$daystr\n"
 }
 
 list_disp_forecast() {
-    hourstr="[$(date -d "$time" +"%H")]"
+    hour="[$(date -d "$time" +"%H")]"
 
-    col=$MODCOL
-    if [ $(echo "$min != $max" | bc) -eq 1 ]; then
-        ratio=$(echo "(100*($temp-($min)))/($max-($min))" | bc)
-        if   [ "$ratio" -lt 33 ]; then col=$CLDCOL
-        elif [ "$ratio" -gt 67 ]; then col=$WRMCOL
-        fi
-    fi
-    tmpstr="$(printf "$col%*.1f°C$NRMCOL" 4 "$temp")"
+    symbstr="$CNDCOL$(sed "$symb!d" "$SMHI/wsymb2")$NRMCOL"
 
-    windstr="$(printf "%*.1f m/s" 3 "$wind")"
-
-    [ "$pmean" = "0" ] && pmean="<0.1"
-    if [ "$pcat" -eq "0" ]
-    then condstr="$CNDCOL$(sed "$symb!d" "$SMHI/wsymb2")$NRMCOL"
-    else condstr="$PRCCOL$(sed "$pcat!d" "$SMHI/pcat") ($pmean mm)$NRMCOL"
+    if [ ! "$pmean" = "0" ]
+    then pmeanstr="$PRCCOL$pmean mm$NRMCOL"
+    else pmeanstr=""
     fi
 
-    [ "$tstm" -gt "5" ] && thustr="$THUCOL$tstm%$NRMCOL"
+    if [ "$tstm" -gt "5" ]
+    then tstmstr="$THUCOL$tstm%%$NRMCOL"
+    else tstmstr=""
+    fi
 
-    printf "$hourstr $tmpstr $windstr $condstr $thustr\n"
+    hourstr=$(echo "$hour $(tfmt $t)" \
+                   " $tcc_mean ($lcc_mean $mcc_mean $hcc_mean)" \
+                   "$(wsfmt $ws) ($(wsfmt $gust)) $symbstr" \
+                   "$pmeanstr $tstmstr")
+    printf "$hourstr\n"
 }
 
 # format and print fetched forecasts
 list_cmd() {
     sync=false
     day_only=false
-    days=1
+    days=
     OPTIND=1
     while getopts sdn: flag; do
         case "$flag" in
@@ -132,6 +175,12 @@ list_cmd() {
 
     [ "$sync" = "true" ] && sync_cmd
     [ -r "$FORECASTS" ] || die "no cache, use sync command"
+    if [ -z "$days" ]; then
+        if [ "$day_only" = "true" ]
+        then days=7
+        else days=1
+        fi
+    fi
     if ! [ "$days" -gt 0 ] 2>/dev/null; then
         die "invalid day count -- $days"
     fi
@@ -153,8 +202,10 @@ list_cmd() {
         day=$(basename $dayfile)
         list_disp_day
         if [ $day_only = "false" ]; then
-            while read -r time temp wind symb pcat pmean tstm; do
-                list_disp_forecast
+            while read -r time msl t vis wd ws r tstm \
+                          tcc_mean lcc_mean mcc_mean hcc_mean \
+                          gust pmin pmax spp pcat pmean pmedian symb
+            do list_disp_forecast
             done < "$dayfile"
         fi
     done
