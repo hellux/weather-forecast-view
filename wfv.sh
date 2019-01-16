@@ -87,15 +87,13 @@ sync_cmd() {
         (.parameters[] | select(.name == "Wsymb2")   | .values[0])  #20
     ] | @tsv' # turn json to tab separated values with 1h forecast per line
 
-    curl -s $API_CALL > "$RNT_DIR/response"
-    if grep -iq "out of bounds" "$RNT_DIR/response"; then
-        die "(%s, %s) is out of bounds" "$WFV_LON" "$WFV_LAT"
+    code="$(curl -w '%{http_code}' -o "$RNT_DIR/response" -s $API_CALL)"
+    if [ "$code" -ne "200" ]; then
+        die "fetch failed -- $code: \"$(cat "$RNT_DIR/response")\""
     fi
 
     mkdir -p "$CCH_DIR"
-
-    jq -r "$JQ_PARSE" "$RNT_DIR/response" > "$FORECASTS" \
-        || die "lon and lat valid? -- (%s,%s)" "$WFV_LON" "$WFV_LAT"
+    jq -r "$JQ_PARSE" "$RNT_DIR/response" > "$FORECASTS" || die "parse failed"
 }
 
 tfmt() {
