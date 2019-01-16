@@ -93,7 +93,6 @@ sync_cmd() {
     fi
 
     mkdir -p "$CCH_DIR"
-
     jq -r "$JQ_PARSE" "$RNT_DIR/response" > "$FORECASTS" \
         || die "lon and lat valid? -- (%s,%s)" "$WFV_LON" "$WFV_LAT"
 }
@@ -110,7 +109,7 @@ tfmt() {
 }
 
 wsfmt() {
-    wsint="$(echo "($1+0.5)/1" | bc)"
+    wsint="$(printf "%.0f" "$1")"
     if   [ "$wsint" -lt  3 ]; then wscol="$WS1COL"
     elif [ "$wsint" -lt  5 ]; then wscol="$WS2COL"
     elif [ "$wsint" -lt  7 ]; then wscol="$WS3COL"
@@ -139,6 +138,8 @@ list_disp_day() {
     ptotal="$(cut -f18 "$dayfile" | LANG=C awk '{p+=$0} END {print p}')"
     if [ "$(echo "$ptotal > 0" | bc)" -eq 1 ]; then
         ptotalstr=$(printf "$PRCCOL%.1f mm$NRMCOL" "$ptotal")
+    else
+        ptotalstr=""
     fi
 
     daystr=$(echo "$day $(tfmt $tmin) $(tfmt $tmax)  $tccstr" \
@@ -164,8 +165,8 @@ list_disp_forecast() {
 
     hourstr=$(echo "$hour $(tfmt $t)" \
                    " $tcc_mean ($lcc_mean $mcc_mean $hcc_mean)" \
-                   "$(wsfmt $ws) ($(wsfmt $gust)) $symbstr" \
-                   "$pmeanstr $tstmstr")
+                   "$(wsfmt $ws) ($(wsfmt $gust))" \
+                   " $symbstr $pmeanstr $tstmstr")
     printf "$hourstr\n"
 }
 
